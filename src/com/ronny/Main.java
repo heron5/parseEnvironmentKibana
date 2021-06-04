@@ -12,24 +12,29 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;  // Import the IOException class to handle errors
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Properties;
 import java.util.Random;
+
+
 
 import org.apache.http.HttpHost;
 
 public class Main {
 
-    public void updateDb(String source, float temperature, float humidity) {
+    public void updateDb(String source, float temperature, float humidity, String timeOffset, String host, String port) {
         SensorProperties sensor = new SensorProperties();
         if (!sensor.getSensorProperties(source))
             return;
 
         long sourceId = sensor.sourceId;
         String description = sensor.shortDescription;
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss+0200");
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss" + timeOffset.trim());
         LocalDateTime now = LocalDateTime.now();
 
         JSONObject jsonBody = new JSONObject();
@@ -48,7 +53,7 @@ public class Main {
 
         System.out.println(jsonBody);
 
-        HttpHost esHost = new HttpHost("192.168.2.203", 9200);
+        HttpHost esHost = new HttpHost(host, Integer.parseInt(port));
         RestClient restClient = RestClient.builder(esHost).build();
 
         Request request = new Request(
@@ -71,10 +76,37 @@ public class Main {
 
     public void run() {
         System.out.println("TopicSubscriber initializing...");
+        System.out.println("Get properties from file...");
 
-        String host = "tcp://kjuladata.se:1883";
-        String username = "DataCenter";
-        String password = "MightyDatacenter2017";
+        String host = "";
+        String username = "";
+        String password = "";
+        String topic = "";
+        String timeOffset = "";
+        String kibanaHost = "";
+        String kibanaPort = "";
+
+        try (InputStream input = new FileInputStream("parseEnvironmentKibana.properties")) {
+
+            Properties prop = new Properties();
+
+            // load a properties file
+            prop.load(input);
+
+            // get the property value and print it out
+            host = prop.getProperty("mqttHost");
+            username = prop.getProperty("mqttUsername");
+            password = prop.getProperty("mqttPassword");
+            topic = prop.getProperty("mqttTopic");
+            timeOffset = prop.getProperty("timeOffset");
+            kibanaHost = prop.getProperty("kibanaHost");
+            kibanaPort = prop.getProperty("kibanaPort");
+
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+
+
 
         try {
             // Create an Mqtt client
@@ -92,9 +124,12 @@ public class Main {
             System.out.println("Connected");
 
             // Topic filter the client will subscribe to
-            final String subTopic = "logger/environment/#";
+            final String subTopic = topic;
 
             // Callback - Anonymous inner-class for receiving messages
+            String finalTimeOffset = timeOffset;
+            String finalKibanaHost = kibanaHost;
+            String finalKibanaPort = kibanaPort;
             mqttClient.setCallback(new MqttCallback() {
                 public void messageArrived(String topic, MqttMessage message) throws Exception {
                     // Called when a message arrives from the server that
@@ -122,7 +157,7 @@ public class Main {
                             String source = (String) loggbysource.get("source");
                             float temperature = Float.parseFloat((String) loggbysource.get("temperature"));
                             float humidity = Float.parseFloat((String) loggbysource.get("humidity"));
-                            updateDb(source, temperature, humidity);
+                            updateDb(source, temperature, humidity, finalTimeOffset, finalKibanaHost, finalKibanaPort);
                         }
                     } catch (Exception pe) {
                         //  System.out.println("position: " + pe.getPosition());
