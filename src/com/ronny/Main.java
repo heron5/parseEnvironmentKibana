@@ -27,7 +27,8 @@ import org.apache.http.HttpHost;
 
 public class Main {
 
-    public void updateDb(String source, float temperature, float humidity, String timeOffset, String host, String port) {
+    public void updateDb(String source, float temperature, float humidity, String timeOffset,
+                         String host, String port, int loggLevel) {
         SensorProperties sensor = new SensorProperties();
         if (!sensor.getSensorProperties(source))
             return;
@@ -51,7 +52,8 @@ public class Main {
         jsonBody.put("tags", jsonTags);
         jsonBody.put("fields", jsonFields);
 
-        System.out.println(jsonBody);
+        if (loggLevel > 1)
+            System.out.println(jsonBody);
 
         HttpHost esHost = new HttpHost(host, Integer.parseInt(port));
         RestClient restClient = RestClient.builder(esHost).build();
@@ -69,8 +71,8 @@ public class Main {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-        System.out.println(response);
+        if (loggLevel > 0)
+            System.out.println(response);
     }
 
 
@@ -85,6 +87,8 @@ public class Main {
         String timeOffset = "";
         String kibanaHost = "";
         String kibanaPort = "";
+        int loggLevel = 0;
+
 
         try (InputStream input = new FileInputStream("parseEnvironmentKibana.properties")) {
 
@@ -101,6 +105,8 @@ public class Main {
             timeOffset = prop.getProperty("timeOffset");
             kibanaHost = prop.getProperty("kibanaHost");
             kibanaPort = prop.getProperty("kibanaPort");
+            loggLevel = Integer.parseInt( prop.getProperty("loggLevel"));
+            System.out.println("Logglevel: "+ loggLevel);
 
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -130,6 +136,7 @@ public class Main {
             String finalTimeOffset = timeOffset;
             String finalKibanaHost = kibanaHost;
             String finalKibanaPort = kibanaPort;
+            int finalLoggLevel = loggLevel;
             mqttClient.setCallback(new MqttCallback() {
                 public void messageArrived(String topic, MqttMessage message) throws Exception {
                     // Called when a message arrives from the server that
@@ -137,7 +144,9 @@ public class Main {
 
                     JSONParser parser = new JSONParser();
                     String payLoad = new String(message.getPayload());
-                    System.out.println(payLoad);
+
+                    if (finalLoggLevel > 1)
+                        System.out.println(payLoad);
                     JSONObject json = (JSONObject) parser.parse(payLoad);
                     JSONArray environmentlogg = (JSONArray) json.get("environmentlogg");
                     try {
@@ -157,7 +166,8 @@ public class Main {
                             String source = (String) loggbysource.get("source");
                             float temperature = Float.parseFloat((String) loggbysource.get("temperature"));
                             float humidity = Float.parseFloat((String) loggbysource.get("humidity"));
-                            updateDb(source, temperature, humidity, finalTimeOffset, finalKibanaHost, finalKibanaPort);
+                            updateDb(source, temperature, humidity, finalTimeOffset,
+                                    finalKibanaHost, finalKibanaPort, finalLoggLevel);
                         }
                     } catch (Exception pe) {
                         //  System.out.println("position: " + pe.getPosition());
