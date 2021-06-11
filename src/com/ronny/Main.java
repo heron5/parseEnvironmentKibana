@@ -67,12 +67,19 @@ public class Main {
         Response response = null;
         try {
             response = restClient.performRequest(request);
-            restClient.close();
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            try {
+                restClient.close();
+            } catch (IOException closeEx){
+                closeEx.printStackTrace();
+            }
+
+            if (loggLevel > 0)
+                System.out.println(response);
+
         }
-        if (loggLevel > 0)
-            System.out.println(response);
     }
 
 
